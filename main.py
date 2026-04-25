@@ -113,6 +113,21 @@ grass_tufts = []
 for _ in range(15):
     grass_tufts.append({'x': random.randint(0, WIDTH), 'height': random.randint(3, 8)})
 
+class Particle:
+    def __init__(self, x, y, dx, dy, life, size, color):
+        self.x = x
+        self.y = y
+        self.dx = dx
+        self.dy = dy
+        self.life = life
+        self.max_life = life
+        self.size = size
+        self.color = color
+
+particles = []
+screen_shake = 0
+speed_lines = []
+
 dino_rect = pygame.Rect(DINO_X, GROUND_Y - DINO_HEIGHT, 40, DINO_HEIGHT)
 dino_y = GROUND_Y - DINO_HEIGHT
 dino_velocity = 0
@@ -276,7 +291,7 @@ def draw_ground(surface):
             pygame.draw.line(surface, GREEN, (x + 6, GROUND_Y + 5), (x + 8, GROUND_Y + 5 - h + 1), 2)
 
 def reset_game():
-    global dino_y, dino_velocity, is_jumping, is_ducking, obstacles, obstacle_timer, score, game_over, game_speed, anim_frame
+    global dino_y, dino_velocity, is_jumping, is_ducking, obstacles, obstacle_timer, score, game_over, game_speed, anim_frame, particles, screen_shake, speed_lines
     dino_y = GROUND_Y - DINO_HEIGHT
     dino_velocity = 0
     is_jumping = False
@@ -287,6 +302,9 @@ def reset_game():
     game_over = False
     game_speed = 6
     anim_frame = 0
+    particles = []
+    screen_shake = 0
+    speed_lines = []
 
 def get_dino_height():
     return DINO_HEIGHT_DUCK if is_ducking else DINO_HEIGHT
@@ -334,6 +352,12 @@ while running:
         draw_background(screen)
         draw_ground(screen)
         anim_frame += 1
+        
+        shake_x = shake_y = 0
+        if screen_shake > 0:
+            shake_x = random.randint(-screen_shake, screen_shake)
+            shake_y = random.randint(-screen_shake, screen_shake)
+            screen_shake -= 1
         
         score_text = font.render(f"Score: {int(score)}", True, DARK_GRAY)
         screen.blit(score_text, (WIDTH - 180, 15))
@@ -390,6 +414,37 @@ while running:
             dino_rect.height = current_height
             draw_dino(screen, DINO_X, int(dino_y), current_height, is_ducking, anim_frame)
             
+            if is_jumping and dino_velocity > 5:
+                if random.random() < 0.3:
+                    particles.append(Particle(
+                        DINO_X + random.randint(10, 30),
+                        GROUND_Y - 5,
+                        random.uniform(-1, 0),
+                        random.uniform(-2, -0.5),
+                        random.randint(10, 20),
+                        random.randint(2, 4),
+                        LIGHT_GRAY
+                    ))
+            
+            if not is_jumping and anim_frame % 5 == 0:
+                if random.random() < 0.4:
+                    particles.append(Particle(
+                        DINO_X + random.randint(15, 35),
+                        GROUND_Y - 2,
+                        random.uniform(-0.5, 0.5),
+                        random.uniform(-1, -0.2),
+                        random.randint(8, 15),
+                        random.randint(1, 3),
+                        LIGHT_GRAY
+                    ))
+            
+            if game_speed > 10 and random.random() < 0.2:
+                speed_lines.append({
+                    'x': WIDTH,
+                    'y': random.randint(50, GROUND_Y - 50),
+                    'length': random.randint(20, 50)
+                })
+            
             obstacle_timer += 1
             spawn_threshold = max(60, 120 - int(score / 10))
             
@@ -416,6 +471,7 @@ while running:
                 
                 if dino_rect.colliderect(obstacle.rect):
                     game_over = True
+                    screen_shake = 15
                     if SOUND_ENABLED and 'game_over_sound' in globals():
                         game_over_sound.play()
                     save_high_score(score)
@@ -459,6 +515,24 @@ while running:
                     if event.key == pygame.K_ESCAPE:
                         game_state = 'start'
                         reset_game()
+        
+        for p in particles[:]:
+            p.x += p.dx
+            p.y += p.dy
+            p.life -= 1
+            if p.life <= 0:
+                particles.remove(p)
+            else:
+                alpha = int(255 * (p.life / p.max_life))
+                size = int(p.size * (p.life / p.max_life))
+                pygame.draw.ellipse(screen, p.color, (int(p.x), int(p.y), size, size))
+        
+        for line in speed_lines[:]:
+            line['x'] -= game_speed * 2
+            if line['x'] + line['length'] < 0:
+                speed_lines.remove(line)
+            else:
+                pygame.draw.line(screen, GRAY, (line['x'], line['y']), (line['x'] + line['length'], line['y']), 1)
     
     pygame.display.flip()
     clock.tick(60)
