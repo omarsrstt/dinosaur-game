@@ -12,3 +12,5 @@ wheels/
 # opencode
 opencode.json
 
+# Ignore score file
+highscore.txt
