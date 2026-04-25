@@ -2,8 +2,39 @@ import pygame
 import sys
 import random
 import math
+import numpy as np
 
 pygame.init()
+
+SOUND_ENABLED = False
+try:
+    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+    SOUND_ENABLED = True
+    print("Sound system initialized")
+except Exception as e:
+    print(f"Sound init failed: {e}")
+
+def generate_tone(freq, duration_ms, volume=0.3):
+    sample_rate = 22050
+    n_samples = int(sample_rate * duration_ms / 1000)
+    t = np.linspace(0, duration_ms/1000, n_samples, False)
+    wave = np.sin(2 * np.pi * freq * t)
+    fade = np.exp(-5 * t)
+    audio = (wave * fade * volume * 32767).astype(np.int16)
+    stereo = np.column_stack((audio, audio))
+    return pygame.mixer.Sound(buffer=stereo.tobytes())
+
+def load_sounds():
+    global jump_sound, game_over_sound
+    if SOUND_ENABLED:
+        try:
+            jump_sound = generate_tone(440, 100, 0.25)
+            game_over_sound = generate_tone(200, 400, 0.3)
+            print("Sounds loaded")
+        except Exception as e:
+            print(f"Sound load failed: {e}")
+
+load_sounds()
 
 WIDTH, HEIGHT = 800, 400
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -316,14 +347,21 @@ while running:
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    game_state = 'start'
+                    reset_game()
                 if jump_pressed(event) and not is_jumping and not game_over:
                     dino_velocity = JUMP_STRENGTH
                     is_jumping = True
                     space_held = True
+                    if SOUND_ENABLED and 'jump_sound' in globals():
+                        jump_sound.play()
                 if event.key == pygame.K_DOWN or event.key == pygame.K_s:
                     if not is_ducking and not is_jumping:
                         is_ducking = True
                         dino_y = GROUND_Y - DINO_HEIGHT_DUCK
+                if event.key == pygame.K_r and game_over:
+                    reset_game()
             if event.type == pygame.KEYUP:
                 if event.key in (pygame.K_SPACE, pygame.K_w, pygame.K_UP):
                     space_held = False
@@ -378,6 +416,8 @@ while running:
                 
                 if dino_rect.colliderect(obstacle.rect):
                     game_over = True
+                    if SOUND_ENABLED and 'game_over_sound' in globals():
+                        game_over_sound.play()
                     save_high_score(score)
                     high_score = load_high_score()
             
@@ -415,6 +455,9 @@ while running:
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
+                        reset_game()
+                    if event.key == pygame.K_ESCAPE:
+                        game_state = 'start'
                         reset_game()
     
     pygame.display.flip()
